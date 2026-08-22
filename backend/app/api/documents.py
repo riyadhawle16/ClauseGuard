@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.dependencies import get_db, get_current_user
-from app.schemas.document import DocumentResponse, ClauseResponse, ProcessingResult
+from app.schemas.document import DocumentResponse, ClauseResponse, ProcessingResult, SearchResult
 from app.services.document_service import (
     upload_document,
     get_document,
@@ -61,7 +61,6 @@ def list_user_documents(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """List all documents belonging to the authenticated user."""
     docs = list_documents(db, str(current_user.id))
     return [_doc_to_response(d) for d in docs]
 
@@ -74,7 +73,6 @@ def get_user_document(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Retrieve a single document — 404 if not owned by the authenticated user."""
     doc = get_document(db, document_id, str(current_user.id))
     clause_count = count_clauses_by_document(db, document_id)
     return _doc_to_response(doc, clause_count=clause_count)
@@ -88,7 +86,6 @@ def delete_user_document(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Delete a document and its stored file — 404 if not owned by the authenticated user."""
     remove_document(db, document_id, str(current_user.id))
 
 
@@ -101,9 +98,9 @@ def trigger_processing(
     current_user=Depends(get_current_user),
 ):
     """
-    Process an uploaded PDF — extract text and clauses.
+    Process an uploaded PDF — extract text, clauses, and generate embeddings.
     Ownership enforced: returns 404 for cross-user access.
-    Reprocessing replaces existing clauses (no duplicates).
+    Reprocessing replaces existing clauses and vectors (no duplicates).
     """
     result = process_document(db, document_id, str(current_user.id))
     return ProcessingResult(**result)
@@ -117,14 +114,8 @@ def get_document_clauses(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """
-    Return all extracted clauses for a document.
-    Ownership enforced: returns 404 for cross-user access.
-    """
-    # Ownership check
     doc = get_document_by_id(db, document_id, str(current_user.id))
     if not doc:
-        from fastapi import HTTPException
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     clauses = get_clauses_by_document(db, document_id)
@@ -138,3 +129,73 @@ def get_document_clauses(
         )
         for c in clauses
     ]
+
+
+# ── Semantic Search ───────────────────────────────────────────────────────────
+
+@router.get("/{document_id}/search", response_model=List[SearchResult])
+def search_document(
+    document_id: str,
+    q: str = Query(..., min_length=1, max_length=500, description="Search query"),
+    top_k: int = Query(default=5, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Semantic search within a document.
+    - Authentication required.
+    - Returns 404 for cross-user access.
+    - Returns 409 if document is not ready/indexed.
+    - Returns top_k most semantically relevant clauses.
+    - Does NOT call any LLM or generate explanations.
+    """
+    # Ownership check
+    doc = get_document_by_id(db, document_id, str(current_user.id))
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    # Document must be fully processed
+    if doc.processing_status != "ready":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document is not ready for search. Please process it first.",
+        )
+
+    query = q.strip()
+    if not query:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Search query must not be empty.",
+        )
+
+    # Generate query embedding
+    from app.services.embedding_service import embed_text
+    from app.services.vector_store_service import semantic_search
+    from app.repositories.clause_repo import get_clauses_by_document
+
+    query_embedding = embed_text(query)
+    hits = semantic_search(query_embedding, document_id, top_k=top_k)
+
+    if not hits:
+        return []
+
+    # Enrich hits with full clause content from PostgreSQL
+    clauses_map = {
+        str(c.id): c
+        for c in get_clauses_by_document(db, document_id)
+    }
+
+    results = []
+    for hit in hits:
+        clause = clauses_map.get(hit["clause_id"])
+        if clause:
+            results.append(SearchResult(
+                clause_id=hit["clause_id"],
+                clause_number=hit["clause_number"],
+                heading=hit.get("heading"),
+                content=clause.content,
+                page_number=hit["page_number"],
+                distance=hit.get("distance"),
+            ))
+
+    return results

@@ -1,14 +1,20 @@
 """
-Processing service — orchestrates the full Phase 4 pipeline:
-  load PDF → extract text → extract clauses → store → update status
+Processing service — orchestrates the full Phase 4+5 pipeline:
+  load PDF → extract text → extract clauses → store in PostgreSQL
+           → generate embeddings → store in Chroma → mark ready
 
-Reprocessing decision:
-  Option B (replace): if a document already has clauses, delete them all
-  before inserting the new batch. This prevents duplicates while allowing
-  re-processing if a document was uploaded incorrectly.
-  Documents with status 'processing' are rejected to avoid concurrent runs.
+Reprocessing (Option B — replace):
+  Old PostgreSQL clauses are deleted before new ones are inserted.
+  Old Chroma vectors are deleted before new ones are stored.
+  This prevents duplicates in both stores.
+
+Partial failure handling:
+  If Chroma indexing fails after PostgreSQL insert, the clauses remain in
+  PostgreSQL (useful for debugging/reprocessing) but the document is marked
+  'failed'. Partial Chroma vectors for that document are cleaned up.
 """
 import logging
+from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status as http_status
 
@@ -16,22 +22,33 @@ from app.repositories.document_repo import get_document_by_id, update_processing
 from app.repositories.clause_repo import (
     delete_clauses_by_document,
     create_clauses_bulk,
-    count_clauses_by_document,
+    get_clauses_by_document,
 )
 from app.services import storage_service
 from app.services.pdf_service import extract_text_by_page, ExtractionError
 from app.services.clause_service import extract_clauses, build_clause_records
+from app.services.indexing_service import index_clauses, delete_document_index
 
 logger = logging.getLogger(__name__)
 
 
-def process_document(db: Session, document_id: str, user_id: str) -> dict:
+def process_document(
+    db: Session,
+    document_id: str,
+    user_id: str,
+    chroma_persist_directory: Optional[str] = None,
+) -> dict:
     """
     Run the full processing pipeline for a document owned by user_id.
 
+    chroma_persist_directory:
+      - None  → use the configured production Chroma directory
+      - ""    → in-memory EphemeralClient (for tests)
+      - <path> → custom path (for tests with tmp_path)
+
     Returns a dict with processing results on success.
     Raises HTTPException on ownership/state errors.
-    Updates document status to 'processing' → 'ready' (or 'failed').
+    Updates document status: processing → ready (or failed).
     """
     # 1. Ownership check — 404 hides other users' documents
     doc = get_document_by_id(db, document_id, user_id)
@@ -52,31 +69,57 @@ def process_document(db: Session, document_id: str, user_id: str) -> dict:
     update_processing_status(db, document_id, "processing")
 
     try:
-        # 4. Load PDF bytes from storage
+        # 4. Load PDF bytes
         try:
             file_bytes = storage_service.load_upload(document_id)
         except FileNotFoundError:
             raise ExtractionError("Stored PDF file not found — the upload may be incomplete.")
 
-        # 5. Extract text page by page (raises ExtractionError on failure)
+        # 5. Extract text (raises ExtractionError on empty/invalid PDF)
         pages = extract_text_by_page(file_bytes)
 
         # 6. Extract structured clauses
         clause_data = extract_clauses(pages, document_id)
-
         if not clause_data:
             raise ExtractionError("No clauses could be extracted from this document.")
 
-        # 7. Delete any existing clauses (reprocessing safety — Option B)
-        deleted = delete_clauses_by_document(db, document_id)
-        if deleted:
-            logger.info("Reprocessing: deleted %d existing clause(s) for document %s", deleted, document_id)
+        # 7. Delete old PostgreSQL clauses (reprocessing safety)
+        deleted_pg = delete_clauses_by_document(db, document_id)
+        if deleted_pg:
+            logger.info("Reprocessing: deleted %d clause(s) from PG for doc %s", deleted_pg, document_id)
 
-        # 8. Build and bulk-insert Clause ORM records
+        # 8. Delete old Chroma vectors (reprocessing safety)
+        try:
+            delete_document_index(document_id, chroma_persist_directory)
+        except Exception:
+            logger.warning("Could not clean old vectors for doc %s before reprocessing", document_id)
+
+        # 9. Insert new clauses into PostgreSQL
         records = build_clause_records(clause_data)
         create_clauses_bulk(db, records)
 
-        # 9. Mark as ready
+        # 10. Index clauses into Chroma — if this fails, document is marked failed
+        #     but PostgreSQL clauses are kept for debugging/reprocessing.
+        try:
+            clauses_from_db = get_clauses_by_document(db, document_id)
+            indexed = index_clauses(
+                clauses_from_db,
+                document_id,
+                persist_directory=chroma_persist_directory,
+            )
+        except Exception as idx_exc:
+            logger.exception("Chroma indexing failed for document %s", document_id)
+            # Clean up any partial vectors
+            try:
+                delete_document_index(document_id, chroma_persist_directory)
+            except Exception:
+                pass
+            raise ExtractionError(
+                "Document text was extracted but could not be indexed for search. "
+                "Please try processing again."
+            ) from idx_exc
+
+        # 11. Mark as ready
         update_processing_status(db, document_id, "ready")
 
         return {
@@ -84,23 +127,22 @@ def process_document(db: Session, document_id: str, user_id: str) -> dict:
             "status": "ready",
             "pages_extracted": len(pages),
             "clauses_extracted": len(records),
+            "vectors_indexed": indexed,
         }
 
     except ExtractionError as exc:
-        # Safe user-facing error — no stack trace, no internal path
         safe_message = str(exc)
-        logger.warning("Extraction failed for document %s: %s", document_id, safe_message)
+        logger.warning("Processing failed for document %s: %s", document_id, safe_message)
         update_processing_status(db, document_id, "failed", error=safe_message)
         raise HTTPException(
             status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=safe_message,
         )
-    except Exception as exc:
-        # Unexpected error — log full details but return a generic message
-        logger.exception("Unexpected processing error for document %s", document_id)
+    except Exception:
+        logger.exception("Unexpected error processing document %s", document_id)
         update_processing_status(
             db, document_id, "failed",
-            error="An unexpected error occurred during processing."
+            error="An unexpected error occurred during processing.",
         )
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,

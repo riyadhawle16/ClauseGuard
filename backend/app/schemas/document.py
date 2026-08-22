@@ -34,3 +34,13 @@ class ProcessingResult(BaseModel):
     status: str
     pages_extracted: int
     clauses_extracted: int
+    vectors_indexed: Optional[int] = None
+
+
+class SearchResult(BaseModel):
+    clause_id: str
+    clause_number: int
+    heading: Optional[str] = None
+    content: str
+    page_number: int
+    distance: Optional[float] = None

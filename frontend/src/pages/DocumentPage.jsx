@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { getDocument, deleteDocument } from '../services/documentsApi'
 import api from '../services/api'
 import Disclaimer from '../components/layout/Disclaimer'
+import SemanticSearch from '../components/document/SemanticSearch'
 
 const STATUS_STYLES = {
   uploaded:   { badge: 'bg-gray-100 text-gray-700',  label: 'Uploaded' },
@@ -196,6 +197,11 @@ export default function DocumentPage() {
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* Semantic Search */}
+            {doc.processing_status === 'ready' && (
+              <SemanticSearch documentId={id} />
             )}
 
             {/* Delete */}

@@ -70,14 +70,24 @@ def list_documents(db: Session, user_id: str) -> List[Document]:
 
 
 def remove_document(db: Session, doc_id: str, user_id: str) -> None:
-    """Delete document record and its stored file. Raises 404 if not owned by user."""
-    # Ownership check first — 404 hides existence from other users
+    """Delete document record, its stored file, and its Chroma vectors. Raises 404 if not owned."""
     doc = get_document_by_id(db, doc_id, user_id)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    # Remove stored file (best-effort — don't fail if file already missing)
+    # Remove stored PDF (best-effort)
     storage_service.delete_upload(str(doc.id))
 
-    # Remove DB record
+    # Remove Chroma vectors (best-effort — don't fail delete if Chroma is unavailable)
+    try:
+        from app.services.indexing_service import delete_document_index
+        delete_document_index(str(doc.id))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Could not remove Chroma vectors for document %s during deletion", doc.id
+        )
+
+    # Remove DB record (cascades to clauses via FK if configured, otherwise clause
+    # records remain — acceptable since the document row is gone)
     delete_document(db, doc_id, user_id)
