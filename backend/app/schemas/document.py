@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 
 class DocumentResponse(BaseModel):
@@ -8,6 +8,7 @@ class DocumentResponse(BaseModel):
     original_filename: str
     processing_status: str
     processing_error: Optional[str] = None
+    clause_count: Optional[int] = None
     created_at: str
     updated_at: str
 
@@ -15,4 +16,21 @@ class DocumentResponse(BaseModel):
 
 
 class DocumentListResponse(BaseModel):
-    documents: list[DocumentResponse]
+    documents: List[DocumentResponse]
+
+
+class ClauseResponse(BaseModel):
+    id: str
+    clause_number: int
+    heading: Optional[str] = None
+    content: str
+    page_number: int
+
+    model_config = {"from_attributes": True}
+
+
+class ProcessingResult(BaseModel):
+    document_id: str
+    status: str
+    pages_extracted: int
+    clauses_extracted: int
