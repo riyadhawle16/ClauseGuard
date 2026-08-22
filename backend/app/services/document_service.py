@@ -88,6 +88,19 @@ def remove_document(db: Session, doc_id: str, user_id: str) -> None:
             "Could not remove Chroma vectors for document %s during deletion", doc.id
         )
 
-    # Remove DB record (cascades to clauses via FK if configured, otherwise clause
-    # records remain — acceptable since the document row is gone)
+    # Remove chat sessions and messages for this document (best-effort)
+    try:
+        from app.models.chat import ChatSession, ChatMessage
+        sessions = db.query(ChatSession).filter(ChatSession.document_id == str(doc.id)).all()
+        for s in sessions:
+            db.query(ChatMessage).filter(ChatMessage.session_id == str(s.id)).delete(synchronize_session=False)
+            db.delete(s)
+        db.commit()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Could not remove chat sessions for document %s during deletion", doc.id
+        )
+
+    # Remove DB record
     delete_document(db, doc_id, user_id)
