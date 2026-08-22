@@ -64,7 +64,7 @@ function FlagRow({ flag }) {
   )
 }
 
-export default function MissingInfoPanel({ documentId }) {
+export default function MissingInfoPanel({ documentId, onAnalysisComplete }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -75,6 +75,7 @@ export default function MissingInfoPanel({ documentId }) {
     try {
       const data = await analyzeMissingInfo(documentId)
       setResult(data)
+      if (onAnalysisComplete) onAnalysisComplete(data)
     } catch (err) {
       setError(err.response?.data?.detail || 'Check failed. Please try again.')
     } finally {

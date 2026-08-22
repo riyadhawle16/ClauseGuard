@@ -10,7 +10,7 @@ import { analyzeAttention, getAttention } from '../../services/attentionApi'
  * Intentionally avoids alarming language. Uses "worth reviewing" framing,
  * NOT "illegal" or "risky".
  */
-export default function AttentionPanel({ documentId }) {
+export default function AttentionPanel({ documentId, onAnalysisComplete }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -22,6 +22,7 @@ export default function AttentionPanel({ documentId }) {
     try {
       const data = await analyzeAttention(documentId)
       setResult(data)
+      if (onAnalysisComplete) onAnalysisComplete(data)
     } catch (err) {
       setError(err.response?.data?.detail || 'Analysis failed. Please try again.')
     } finally {
