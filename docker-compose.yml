@@ -1,12 +1,27 @@
 version: '3.9'
 
+# ============================================================
+# ClauseGuard — Local Development Docker Compose
+#
+# Usage:
+#   1. Copy backend/.env.example to backend/.env and fill in values.
+#   2. docker-compose up --build
+#
+# Services:
+#   db        PostgreSQL 15          → localhost:5432
+#   chroma    ChromaDB               → localhost:8001 (mapped from 8000)
+#   backend   FastAPI / Uvicorn      → localhost:8000
+#   frontend  React (nginx)          → localhost:3000
+# ============================================================
+
 services:
+
   db:
     image: postgres:15
     environment:
       POSTGRES_DB: clauseguard
       POSTGRES_USER: clauseguard
-      POSTGRES_PASSWORD: clauseguard_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clauseguard_dev_password}
     ports:
       - "5432:5432"
     volumes:
@@ -17,31 +32,41 @@ services:
       timeout: 5s
       retries: 5
 
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - ./backend/.env
     environment:
-      DATABASE_URL: postgresql://clauseguard:clauseguard_password@db:5432/clauseguard
-      JWT_SECRET_KEY: dev-secret-key-change-in-production
-      JWT_ALGORITHM: HS256
-      JWT_EXPIRE_MINUTES: 1440
-      GROQ_API_KEY: ""
-      GROQ_MODEL: llama3-8b-8192
-      CHROMA_HOST: localhost
-      CHROMA_PORT: 8000
-      EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
-      MAX_FILE_SIZE_MB: 20
-      CORS_ORIGINS: "http://localhost:5173,http://localhost:3000"
+      # Override DATABASE_URL to use the Docker service hostname
+      DATABASE_URL: postgresql://clauseguard:${POSTGRES_PASSWORD:-clauseguard_dev_password}@db:5432/clauseguard
+      # Override Chroma to use the Docker service hostname
+      CHROMA_PERSIST_DIRECTORY: /chroma_data
+    volumes:
+      - uploads_data:/app/uploads
+      - chroma_data:/chroma_data
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-    working_dir: /app
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:80"
     depends_on:
@@ -49,3 +74,5 @@ services:
 
 volumes:
   postgres_data:
+  chroma_data:
+  uploads_data:

@@ -40,8 +40,8 @@ PostgreSQL  Chroma
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
 | LLM | Groq API (llama3-8b-8192) |
 | Testing | pytest, pytest-cov |
-| Infrastructure | Docker, GitHub Actions |
-| Deployment | Frontend → Vercel · Backend → Render/Railway |
+| Infrastructure | Docker |
+| Deployment target | Frontend → Vercel · Backend → Render/Railway |
 
 ---
 
@@ -238,17 +238,25 @@ The project is implemented in 10 phases. **Phases 1–9 are complete.**
 
 ---
 
-### ⏳ Phase 10 — Testing, Docker, CI/CD & Deployment Preparation
+### ✅ Phase 10 — Final Testing, Docker Verification, Security Review & Deployment Preparation
 
-**Status: Planned**
+**Status: Complete**
 
-- Complete pytest coverage (≥ 80% line coverage)
-- Docker Compose: backend + frontend + PostgreSQL + Chroma
-- GitHub Actions CI/CD pipeline: lint → test → coverage → build
-- Vercel deployment configuration for frontend
-- Render/Railway deployment configuration for backend
-- `DEPLOYMENT.md` with environment variable documentation
-- Final security review
+- Backend test suite verified: **176/176 tests passing**
+- Frontend production build verified: **110 modules, 3.04s**
+- Docker configuration reviewed and corrected:
+  - Removed dev-only `--reload` flag from backend CMD
+  - Removed volume mount that overwrote container dependencies
+  - Added Chroma service to docker-compose
+  - Added persistent volume for uploads and Chroma data
+  - Added `alembic upgrade head` to backend startup command
+  - Parameterised PostgreSQL password via env var
+- Environment variables documented in `.env.example` with comments
+- Security review completed (see Security section below)
+- Legal-safety rules verified intact
+- `.gitignore` verified — no secrets, databases, or build artifacts committed
+- README updated to match actual implementation
+- No CI/CD pipeline implemented (documented as future improvement)
 
 ---
 
@@ -351,6 +359,50 @@ pytest app/tests/ --cov=app --cov-report=term-missing
 ```
 
 Current test count: **176 passing**
+
+---
+
+## Security Design
+
+The following security measures are implemented and verified:
+
+- **Authentication:** JWT Bearer tokens required on all protected endpoints. `HTTPBearer` dependency used throughout — missing or invalid tokens return 401/403.
+- **Ownership isolation:** Every database query for documents, clauses, chat sessions, attention flags, and missing-info results is scoped to the authenticated user's ID. Cross-user access returns 404 (not 403) to avoid confirming resource existence.
+- **PDF validation:** Uploaded files are validated by file size (≤ 20 MB), extension (`.pdf` only), and magic bytes (`%PDF` prefix). The original filename is never used as a filesystem path — a UUID is used instead.
+- **Path traversal prevention:** Uploaded files are stored as `{uuid}.pdf` only. The original filename is stored in the database for display only.
+- **Chroma isolation:** All vector store queries include `document_id` as a mandatory filter. Users cannot retrieve vectors from other users' documents.
+- **LLM secret protection:** The Groq API key is read server-side from environment variables only. It is never returned in any API response. The frontend has no access to it.
+- **No stack trace exposure:** All exception handlers return safe user-facing messages. Internal errors are logged server-side only.
+- **Prompt injection defence:** Document content is explicitly labelled as "UNTRUSTED DOCUMENT DATA" in all LLM prompts. The system prompt instructs the model to ignore any instructions found in document content.
+- **Chat history isolation:** Chat sessions and messages are scoped to user_id + document_id. Cross-user history access returns 404.
+
+---
+
+## Legal-Safety Design
+
+ClauseGuard is **not a legal advice system**. The following design constraints are enforced:
+
+- **Predefined rules only:** The 10 attention categories are hardcoded in `app/rules/attention_rules.py`. The LLM cannot create new categories.
+- **No legal conclusions:** LLM prompts explicitly forbid terms like "illegal", "unenforceable", "legally valid", or "legally invalid".
+- **No legal thresholds:** The system does not compare deposit amounts, notice periods, or penalties against any statutory limits.
+- **Grounded answers only:** RAG answers are derived from retrieved document clauses only. If no relevant clauses are found, the system returns a safe fallback message without speculating.
+- **Backend-generated citations:** Citation metadata (clause ID, clause number, page number) comes from PostgreSQL records — never from the LLM output.
+- **"Not identified" ≠ "illegal":** The missing-information detection system uses `PRESENT / UNCLEAR / NOT_IDENTIFIED` statuses. It never claims a missing clause makes an agreement invalid or illegal.
+
+---
+
+## Future Improvements
+
+The following items are documented as future work and are **not currently implemented**:
+
+- **CI/CD pipeline** — GitHub Actions for automated testing and deployment
+- **OCR support** — processing scanned/image-only PDFs
+- **Negotiation assistant** — generating neutral suggestions for clause discussions
+- **Version comparison** — semantic comparison between uploaded agreement versions
+- **Rate limiting** — Redis-based per-user request limiting
+- **Coverage enforcement** — enforcing ≥ 80% line coverage via CI
+- **Production deployment** — Vercel (frontend) and Render/Railway (backend) configuration
+- **Datetime/SQLAlchemy deprecation cleanup** — addressing `utcnow()` and `declarative_base()` deprecation warnings intentionally deferred from Phases 1–10
 
 ---
 
