@@ -5,6 +5,7 @@ import api from '../services/api'
 import Disclaimer from '../components/layout/Disclaimer'
 import ChatPanel from '../components/document/ChatPanel'
 import AttentionPanel from '../components/document/AttentionPanel'
+import MissingInfoPanel from '../components/document/MissingInfoPanel'
 
 const STATUS_STYLES = {
   uploaded:   { badge: 'bg-gray-100 text-gray-700',  label: 'Uploaded' },
@@ -208,6 +209,11 @@ export default function DocumentPage() {
             {/* Attention Analysis */}
             {doc.processing_status === 'ready' && (
               <AttentionPanel documentId={id} />
+            )}
+
+            {/* Missing Information */}
+            {doc.processing_status === 'ready' && (
+              <MissingInfoPanel documentId={id} />
             )}
 
             {/* Delete */}

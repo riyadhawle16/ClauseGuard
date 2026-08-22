@@ -5,6 +5,7 @@ from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
 from app.api.chat import router as chat_router
 from app.api.attention import router as attention_router
+from app.api.missing_info import router as missing_info_router
 
 settings = get_settings()
 
@@ -28,6 +29,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(documents_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(attention_router, prefix="/api/v1")
+app.include_router(missing_info_router, prefix="/api/v1")
 
 
 @app.get("/health")
