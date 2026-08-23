@@ -5,6 +5,8 @@ import Navbar from '../components/layout/Navbar'
 import DocumentCard from '../components/dashboard/DocumentCard'
 import EmptyState from '../components/dashboard/EmptyState'
 import DashboardStats from '../components/dashboard/DashboardStats'
+import FeatureGuide from '../components/dashboard/FeatureGuide'
+import FeatureIcon from '../components/ui/FeatureIcon'
 
 export default function DashboardPage() {
   const [documents, setDocuments] = useState([])
@@ -40,64 +42,68 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-bg">
       <Navbar />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Your Agreements</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Upload, process, and analyse your rental agreements.
-            </p>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
+        {/* Welcome banner */}
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-6 sm:p-8 mb-8 text-white shadow-soft">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold">Your Agreements</h1>
+              <p className="mt-1 text-indigo-100 text-sm max-w-lg">
+                Upload a rental PDF, process it once, then use ClauseGuard&apos;s analysis tools to review it before signing.
+              </p>
+            </div>
+            <Link to="/documents/new" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-indigo-700 px-5 py-2.5 text-sm font-semibold hover:bg-indigo-50 transition-colors shadow-sm shrink-0">
+              <FeatureIcon name="upload" className="w-4 h-4" />
+              Upload agreement
+            </Link>
           </div>
-          <Link
-            to="/documents/new"
-            className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            <span>+</span>
-            Upload
-          </Link>
         </div>
 
-        {/* Loading */}
         {loading && (
           <div className="text-center py-16">
-            <p className="text-gray-500 text-sm">Loading your agreements…</p>
+            <div className="inline-block w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3" />
+            <p className="text-slate-500 text-sm">Loading your agreements…</p>
           </div>
         )}
 
-        {/* Error */}
         {!loading && error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm mb-4">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm mb-4">
             {error}
-            <button
-              onClick={fetchDocuments}
-              className="ml-3 text-red-800 underline text-xs"
-            >
+            <button onClick={fetchDocuments} className="ml-3 text-red-800 underline text-xs font-medium">
               Retry
             </button>
           </div>
         )}
 
-        {/* Empty */}
-        {!loading && !error && documents.length === 0 && <EmptyState />}
+        {!loading && !error && documents.length === 0 && (
+          <>
+            <FeatureGuide />
+            <EmptyState />
+          </>
+        )}
 
-        {/* Stats + List */}
         {!loading && !error && documents.length > 0 && (
           <>
             <DashboardStats documents={documents} />
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Recent agreements</h2>
+              <span className="text-xs text-slate-400">{documents.length} total</span>
+            </div>
             <div className="space-y-3">
               {documents.map((doc) => (
                 <DocumentCard key={doc.id} doc={doc} onDelete={handleDelete} />
               ))}
             </div>
+            <div className="mt-10">
+              <FeatureGuide />
+            </div>
           </>
         )}
 
-        {/* Legal disclaimer at bottom */}
-        <p className="mt-10 text-xs text-gray-400 text-center max-w-xl mx-auto">
+        <p className="mt-10 text-xs text-slate-400 text-center max-w-xl mx-auto">
           ClauseGuard provides document analysis and general informational insights.
           It is not a substitute for professional legal advice.
         </p>

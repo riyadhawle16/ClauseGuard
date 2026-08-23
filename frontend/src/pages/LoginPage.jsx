@@ -3,6 +3,8 @@ import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { login } from '../services/authApi'
 import Disclaimer from '../components/layout/Disclaimer'
+import FeatureIcon from '../components/ui/FeatureIcon'
+import { FEATURES } from '../constants/features'
 
 export default function LoginPage() {
   const { login: setToken, isAuthenticated } = useAuth()
@@ -12,7 +14,6 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Use Navigate component instead of imperative navigate() during render
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />
   }
@@ -27,11 +28,9 @@ export default function LoginPage() {
       navigate('/dashboard', { replace: true })
     } catch (err) {
       if (!err.response) {
-        setError('Cannot connect to the server. Please make sure the backend is running on port 8000.')
+        setError('Cannot connect to the server. Please make sure the backend is running.')
       } else {
-        setError(
-          err.response?.data?.detail || 'Login failed. Please check your credentials.'
-        )
+        setError(err.response?.data?.detail || 'Login failed. Please check your credentials.')
       }
     } finally {
       setLoading(false)
@@ -39,60 +38,64 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Sign in</h1>
-        <p className="text-gray-500 text-sm mb-6">Welcome back to ClauseGuard</p>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
+    <div className="page-bg min-h-screen flex">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-indigo-600 via-violet-600 to-indigo-800 p-12 flex-col justify-center text-white">
+        <div className="max-w-md">
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <FeatureIcon name="shield" className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold">ClauseGuard</span>
           </div>
-        )}
+          <h2 className="text-3xl font-bold leading-tight">Review rental agreements with confidence</h2>
+          <p className="mt-3 text-indigo-100 text-sm leading-relaxed">
+            Sign in to access your uploaded agreements and analysis tools.
+          </p>
+          <ul className="mt-8 space-y-4">
+            {FEATURES.slice(0, 4).map((f) => (
+              <li key={f.id} className="flex gap-3">
+                <div className="shrink-0 w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
+                  <FeatureIcon name={f.id} className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{f.title}</p>
+                  <p className="text-xs text-indigo-200 mt-0.5">{f.shortDesc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-card border border-slate-200 p-8 animate-slide-up">
+          <h1 className="text-2xl font-bold text-slate-900 mb-1">Welcome back</h1>
+          <p className="text-slate-500 text-sm mb-6">Sign in to continue to ClauseGuard</p>
 
-        <p className="mt-4 text-sm text-center text-gray-500">
-          Don&apos;t have an account?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline">
-            Create one
-          </Link>
-        </p>
-        <Disclaimer />
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email</label>
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="input-field" placeholder="you@example.com" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
+              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input-field" placeholder="••••••••" />
+            </div>
+            <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="mt-5 text-sm text-center text-slate-500">
+            Don&apos;t have an account?{' '}
+            <Link to="/register" className="text-indigo-600 font-semibold hover:underline">Create one</Link>
+          </p>
+          <Disclaimer />
+        </div>
       </div>
     </div>
   )

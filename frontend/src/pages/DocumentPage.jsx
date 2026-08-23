@@ -8,12 +8,15 @@ import AnalysisSummary from '../components/document/AnalysisSummary'
 import AttentionPanel from '../components/document/AttentionPanel'
 import MissingInfoPanel from '../components/document/MissingInfoPanel'
 import ChatPanel from '../components/document/ChatPanel'
+import SemanticSearch from '../components/document/SemanticSearch'
+import FeatureIcon from '../components/ui/FeatureIcon'
+import { getFeature } from '../constants/features'
 
 const STATUS_CONFIG = {
-  uploaded:   { badge: 'bg-gray-100 text-gray-700',   label: 'Uploaded',   dot: 'bg-gray-400' },
-  processing: { badge: 'bg-blue-100 text-blue-700',   label: 'Processing', dot: 'bg-blue-500 animate-pulse' },
-  ready:      { badge: 'bg-green-100 text-green-700', label: 'Ready',      dot: 'bg-green-500' },
-  failed:     { badge: 'bg-red-100 text-red-700',     label: 'Failed',     dot: 'bg-red-500' },
+  uploaded:   { badge: 'bg-amber-50 text-amber-700 border-amber-200',   label: 'Uploaded',   dot: 'bg-amber-500' },
+  processing: { badge: 'bg-indigo-50 text-indigo-700 border-indigo-200', label: 'Processing', dot: 'bg-indigo-500 animate-pulse' },
+  ready:      { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Ready',   dot: 'bg-emerald-500' },
+  failed:     { badge: 'bg-red-50 text-red-700 border-red-200',         label: 'Failed',     dot: 'bg-red-500' },
 }
 
 async function fetchClauses(docId) {
@@ -140,10 +143,10 @@ export default function DocumentPage() {
     : null
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-bg">
       <Navbar showUpload />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
 
         {/* Loading */}
         {loading && (
@@ -161,21 +164,25 @@ export default function DocumentPage() {
 
         {!loading && !pageError && doc && (
           <>
-            {/* ── SECTION 1: Agreement overview ─────────────────────────── */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
-              {/* Breadcrumb */}
-              <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
-                <Link to="/dashboard" className="hover:text-gray-600">Agreements</Link>
+            {/* ── Agreement overview ─────────────────────────── */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 shadow-sm">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
+                <Link to="/dashboard" className="hover:text-indigo-600 font-medium">Agreements</Link>
                 <span>/</span>
-                <span className="text-gray-600 truncate max-w-[200px]">{doc.title}</span>
+                <span className="text-slate-600 truncate max-w-[200px]">{doc.title}</span>
               </div>
 
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h1 className="text-xl font-bold text-gray-900 leading-tight">{doc.title}</h1>
-                  <p className="text-sm text-gray-500 mt-0.5">{doc.original_filename}</p>
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center">
+                    <FeatureIcon name="extract" className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="text-xl font-bold text-slate-900 leading-tight">{doc.title}</h1>
+                    <p className="text-sm text-slate-500 mt-0.5">{doc.original_filename}</p>
+                  </div>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium shrink-0 ${statusCfg.badge}`}>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border shrink-0 ${statusCfg.badge}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
                   {statusCfg.label}
                 </span>
@@ -201,31 +208,39 @@ export default function DocumentPage() {
               </dl>
             </div>
 
-            {/* ── SECTION 2: Processing status / actions ─────────────────── */}
             {doc.processing_status === 'uploaded' && (
-              <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Process Agreement</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                  Extract text and clauses from this PDF before running analysis.
-                </p>
-                {processError && (
-                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                    {processError}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                    <FeatureIcon name="extract" className="w-5 h-5 text-indigo-600" />
                   </div>
-                )}
-                <button
-                  onClick={handleProcess}
-                  disabled={processing}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {processing ? 'Processing agreement…' : 'Process Document'}
-                </button>
+                  <div className="flex-1">
+                    <h2 className="text-base font-semibold text-slate-900">Process Agreement</h2>
+                    <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                      {getFeature('extract')?.desc}
+                    </p>
+                    {processError && (
+                      <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{processError}</div>
+                    )}
+                    <button
+                      onClick={handleProcess}
+                      disabled={processing}
+                      className="btn-primary mt-4 !py-2"
+                    >
+                      {processing ? 'Processing agreement…' : 'Process Document'}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
             {doc.processing_status === 'processing' && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-sm text-blue-700">
-                Processing agreement — extracting text and building search index. This may take a minute…
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 mb-4 flex items-center gap-3">
+                <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-indigo-800">Processing your agreement</p>
+                  <p className="text-xs text-indigo-600 mt-0.5">Extracting clauses and building the search index — usually takes under a minute.</p>
+                </div>
               </div>
             )}
 
@@ -248,43 +263,46 @@ export default function DocumentPage() {
               </div>
             )}
 
-            {/* ── Analysis summary (only when ready and results loaded) ──── */}
+            {doc.processing_status === 'ready' && (
+              <div className="mb-6 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 p-5">
+                <h2 className="text-sm font-semibold text-indigo-900">Analysis toolkit</h2>
+                <p className="text-xs text-indigo-700/80 mt-1 leading-relaxed">
+                  Your document is ready. Use the tools below — each one focuses on a different aspect of your agreement.
+                </p>
+              </div>
+            )}
+
             {doc.processing_status === 'ready' && (attentionSummary || missingInfoSummary) && (
               <AnalysisSummary attention={attentionSummary} missingInfo={missingInfoSummary} />
             )}
 
-            {/* ── SECTION 3: Attention Analysis ─────────────────────────── */}
             {doc.processing_status === 'ready' && (
-              <AttentionPanel
-                documentId={id}
-                onAnalysisComplete={(data) => setAttentionSummary(data)}
-              />
+              <>
+                <AttentionPanel documentId={id} onAnalysisComplete={(data) => setAttentionSummary(data)} />
+                <MissingInfoPanel documentId={id} onAnalysisComplete={(data) => setMissingInfoSummary(data)} />
+                <SemanticSearch documentId={id} />
+                <ChatPanel documentId={id} />
+              </>
             )}
 
-            {/* ── SECTION 4: Missing Information ────────────────────────── */}
-            {doc.processing_status === 'ready' && (
-              <MissingInfoPanel
-                documentId={id}
-                onAnalysisComplete={(data) => setMissingInfoSummary(data)}
-              />
-            )}
-
-            {/* ── SECTION 5: Ask your agreement ─────────────────────────── */}
-            {doc.processing_status === 'ready' && (
-              <ChatPanel documentId={id} />
-            )}
-
-            {/* ── SECTION 6: Extracted clauses (collapsible) ─────────────── */}
             {doc.processing_status === 'ready' && clauses.length > 0 && (
-              <div className="mt-6 bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                 <button
                   onClick={() => setShowClauses((p) => !p)}
-                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors"
                 >
-                  <span className="text-sm font-semibold text-gray-700">
-                    Extracted Clauses ({clauses.length})
-                  </span>
-                  <span className="text-gray-400">{showClauses ? '▲' : '▼'}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <FeatureIcon name="extract" className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-slate-800">
+                        Extracted Clauses ({clauses.length})
+                      </span>
+                      <p className="text-xs text-slate-500 mt-0.5">Every clause parsed from your PDF, numbered and page-referenced.</p>
+                    </div>
+                  </div>
+                  <span className="text-slate-400">{showClauses ? '▲' : '▼'}</span>
                 </button>
 
                 {showClauses && (

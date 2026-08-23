@@ -1,16 +1,14 @@
 import { useState } from 'react'
 import api from '../../services/api'
+import PanelHeader from '../ui/PanelHeader'
+import { getFeature } from '../../constants/features'
 
-/**
- * Semantic search panel for a processed document.
- * Calls GET /api/v1/documents/{id}/search?q=...
- * Displays retrieved clauses — no AI generation, no chat.
- */
 export default function SemanticSearch({ documentId }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState(null)  // null = not searched yet
+  const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const feature = getFeature('search')
 
   async function handleSearch(e) {
     e.preventDefault()
@@ -34,71 +32,68 @@ export default function SemanticSearch({ documentId }) {
     }
   }
 
+  const examples = ['early termination', 'security deposit', 'maintenance responsibility']
+
   return (
-    <div className="mt-6 bg-white border border-gray-200 rounded-xl p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">Search this Agreement</h2>
-      <p className="text-xs text-gray-400 mb-4">
-        Find relevant clauses by entering a question or topic.
-      </p>
+    <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <PanelHeader featureId="search" />
 
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="e.g. What happens if I leave early?"
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          disabled={loading || !query.trim()}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
-        >
-          {loading ? 'Searching…' : 'Search'}
-        </button>
-      </form>
+      <div className="px-5 py-4">
+        <p className="text-xs text-slate-500 mb-4 leading-relaxed">{feature?.desc}</p>
 
-      {error && (
-        <p className="mt-3 text-sm text-red-600">{error}</p>
-      )}
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="e.g. What happens if I leave early?"
+            className="input-field flex-1"
+            disabled={loading}
+          />
+          <button type="submit" disabled={loading || !query.trim()} className="bg-violet-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-violet-700 disabled:opacity-50 transition-colors shrink-0">
+            {loading ? 'Searching…' : 'Search'}
+          </button>
+        </form>
 
-      {results !== null && results.length === 0 && (
-        <p className="mt-4 text-sm text-gray-500">
-          No relevant clauses found for your query.
-        </p>
-      )}
-
-      {results && results.length > 0 && (
-        <div className="mt-4 space-y-3">
-          <p className="text-xs text-gray-400">{results.length} result{results.length !== 1 ? 's' : ''} found</p>
-          {results.map((result) => (
-            <div
-              key={result.clause_id}
-              className="border border-gray-100 rounded-lg p-4 bg-gray-50"
+        <div className="mt-3 flex flex-wrap gap-2">
+          {examples.map((ex) => (
+            <button
+              key={ex}
+              type="button"
+              onClick={() => setQuery(ex)}
+              className="text-xs text-violet-600 bg-violet-50 hover:bg-violet-100 px-2.5 py-1 rounded-full transition-colors"
             >
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-xs font-medium text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded">
-                  Clause {result.clause_number}
-                </span>
-                <span className="text-xs text-gray-400">Page {result.page_number}</span>
-                {result.heading && (
-                  <span className="text-xs font-semibold text-gray-700">{result.heading}</span>
-                )}
-              </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                {result.content.length > 500
-                  ? result.content.slice(0, 500) + '…'
-                  : result.content}
-              </p>
-            </div>
+              {ex}
+            </button>
           ))}
-          <p className="text-xs text-gray-400 mt-2">
-            ClauseGuard provides document retrieval only. Results are excerpts from your
-            agreement and do not constitute legal advice.
-          </p>
         </div>
-      )}
+
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        {results !== null && results.length === 0 && (
+          <p className="mt-4 text-sm text-slate-500">No relevant clauses found for your query.</p>
+        )}
+
+        {results && results.length > 0 && (
+          <div className="mt-4 space-y-3">
+            <p className="text-xs font-medium text-slate-400">{results.length} matching clause{results.length !== 1 ? 's' : ''}</p>
+            {results.map((result) => (
+              <div key={result.clause_id} className="border border-violet-100 rounded-xl p-4 bg-violet-50/30">
+                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                  <span className="text-xs font-semibold text-violet-700 bg-violet-100 px-2.5 py-0.5 rounded-full">
+                    Clause {result.clause_number}
+                  </span>
+                  <span className="text-xs text-slate-400">Page {result.page_number}</span>
+                  {result.heading && <span className="text-xs font-semibold text-slate-700">{result.heading}</span>}
+                </div>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {result.content.length > 500 ? result.content.slice(0, 500) + '…' : result.content}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
