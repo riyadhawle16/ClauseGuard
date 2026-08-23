@@ -34,6 +34,7 @@ def _validate_password_byte_length(password: str) -> None:
 
 
 def hash_password(password: str) -> str:
+    _validate_password_byte_length(password)
     return pwd_context.hash(password)
 
 

@@ -1,7 +1,9 @@
 import logging
 import os
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
@@ -9,6 +11,11 @@ from app.api.chat import router as chat_router
 from app.api.attention import router as attention_router
 from app.api.missing_info import router as missing_info_router
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    force=True,
+)
 logger = logging.getLogger(__name__)
 
 # ── Load settings ─────────────────────────────────────────────────────────────
@@ -48,6 +55,20 @@ app.include_router(documents_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(attention_router, prefix="/api/v1")
 app.include_router(missing_info_router, prefix="/api/v1")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Safety net: return JSON (not plain-text) for any unhandled exception."""
+    logger.exception(
+        "Unhandled exception on %s %s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred."},
+    )
 
 
 @app.on_event("startup")
