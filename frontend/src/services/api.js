@@ -1,9 +1,22 @@
 import axios from 'axios'
 
-// When running via `npm run dev`, Vite proxies /api/* to http://localhost:8000
-// so baseURL can be empty (relative).
-// In production builds deployed on a real server, set VITE_API_URL to the
-// backend URL (e.g. https://your-backend.render.com).
+/**
+ * Central Axios instance for all API calls.
+ *
+ * LOCAL DEVELOPMENT (npm run dev):
+ *   - Leave VITE_API_URL unset or empty in frontend/.env
+ *   - Vite dev server proxies /api/* → http://localhost:8000 automatically
+ *   - baseURL stays '' so all requests use relative paths through the proxy
+ *
+ * PRODUCTION (Vercel deployment):
+ *   - Set VITE_API_URL in the Vercel dashboard environment variables:
+ *     VITE_API_URL = https://your-app.onrender.com
+ *   - This is injected at build time by Vite
+ *   - baseURL becomes 'https://your-app.onrender.com'
+ *   - All API calls go directly to the Render backend
+ *
+ * NEVER hardcode a backend URL anywhere other than this file.
+ */
 const baseURL = import.meta.env.VITE_API_URL || ''
 
 const api = axios.create({
@@ -22,7 +35,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// On 401, clear token and redirect to login
+// Handle 401 globally — clear token and redirect to login
 api.interceptors.response.use(
   (response) => response,
   (error) => {
