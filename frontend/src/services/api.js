@@ -1,7 +1,13 @@
 import axios from 'axios'
 
+// When running via `npm run dev`, Vite proxies /api/* to http://localhost:8000
+// so baseURL can be empty (relative).
+// In production builds deployed on a real server, set VITE_API_URL to the
+// backend URL (e.g. https://your-backend.render.com).
+const baseURL = import.meta.env.VITE_API_URL || ''
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },

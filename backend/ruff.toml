@@ -1,0 +1,21 @@
+# Ruff configuration for ClauseGuard backend.
+# Kept minimal — does not force reformatting of existing code.
+# CI runs: ruff check app/ --select E,F
+# Certain rules are ignored to avoid disrupting existing working code.
+
+line-length = 120
+
+[lint]
+select = ["E", "F"]
+ignore = [
+    "E501",   # line too long — not enforced to keep existing code untouched
+    "F401",   # unused imports — present in test files; safe to ignore in CI
+    "F841",   # local variable assigned but unused — pre-existing in test utilities
+]
+
+exclude = [
+    ".venv",
+    "venv",
+    "__pycache__",
+    "migrations",
+]

@@ -1,0 +1,114 @@
+name: CI
+
+# ── Triggers ───────────────────────────────────────────────────────────────────
+# Run on every push to main and on every pull request targeting main.
+# Production deployment to Vercel (frontend) and Render (backend) is handled
+# automatically by their GitHub Git integration — NOT by this workflow.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ── Jobs ───────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── Backend: lint + test + coverage ─────────────────────────────────────────
+  backend:
+    name: Backend — Lint / Test / Coverage
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      # 1. Check out source
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up Python 3.11 (matches Dockerfile and local dev)
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 3. Cache pip packages to speed up subsequent runs
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 4. Install all dependencies (including ruff, pytest, pytest-cov)
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # 5. Lint with Ruff (config in backend/ruff.toml)
+      #    Ignores E501, F401, F841 to avoid reformatting existing working code.
+      - name: Lint with Ruff
+        run: python -m ruff check app/
+
+      # 6. Run the complete test suite with coverage report
+      #    Tests use SQLite in-memory (no PostgreSQL needed in CI).
+      #    LLM calls are mocked — no real GROQ_API_KEY required.
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: "sqlite://"
+          JWT_SECRET_KEY: "ci-test-secret-key-not-used-in-production"
+          UPLOAD_DIR: "/tmp/clauseguard_uploads"
+          CHROMA_PERSIST_DIRECTORY: ""
+          GROQ_API_KEY: ""
+          EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+        run: |
+          python -m pytest app/tests/ \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --tb=short \
+            -q
+
+      # 7. Upload coverage report as an artifact for inspection
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: backend/coverage.xml
+          retention-days: 7
+
+  # ── Frontend: install + build ────────────────────────────────────────────────
+  frontend:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      # 1. Check out source
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js 18 (matches frontend/Dockerfile)
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # 3. Install exact dependencies from lock file
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Run production build
+      #    VITE_API_URL is set to a placeholder — the build must succeed
+      #    without a real backend running.
+      - name: Build
+        env:
+          VITE_API_URL: "http://localhost:8000"
+        run: npm run build

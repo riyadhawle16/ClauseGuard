@@ -1,0 +1,33 @@
+services:
+  # ClauseGuard Backend — Render Web Service
+  # Render automatically deploys when new commits are pushed to the connected
+  # GitHub branch (main). This file documents the service configuration.
+  - type: web
+    name: clauseguard-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # Set these in the Render dashboard — never commit real values here.
+      - key: DATABASE_URL
+        sync: false   # Set in Render dashboard
+      - key: JWT_SECRET_KEY
+        sync: false   # Set in Render dashboard
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "1440"
+      - key: GROQ_API_KEY
+        sync: false   # Set in Render dashboard
+      - key: GROQ_MODEL
+        value: llama3-8b-8192
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: CHROMA_PERSIST_DIRECTORY
+        value: /opt/render/project/chroma_data
+      - key: UPLOAD_DIR
+        value: /opt/render/project/uploads
+      - key: MAX_FILE_SIZE_MB
+        value: "20"
+      - key: CORS_ORIGINS
+        value: https://your-frontend.vercel.app

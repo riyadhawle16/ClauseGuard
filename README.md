@@ -350,15 +350,81 @@ Copy `backend/.env.example` and fill in:
 
 ---
 
+## CI/CD
+
+ClauseGuard uses GitHub Actions for continuous integration.
+
+### What happens automatically
+
+**Every push to `main` and every pull request targeting `main` triggers:**
+
+1. **Backend lint** — Ruff checks Python code for errors (`E` + `F` rules)
+2. **Backend tests** — Full pytest suite (176 tests) using SQLite in-memory; no real API key needed
+3. **Coverage report** — pytest-cov generates a coverage XML report (uploaded as a workflow artifact)
+4. **Frontend build** — `npm ci` + `npm run build` verifies the React app compiles cleanly
+
+### Deployment
+
+Deployment is handled by platform Git integrations — not by GitHub Actions:
+
+- **Frontend → Vercel**: Vercel watches the `main` branch and deploys automatically when new commits are pushed
+- **Backend → Render**: Render watches the `main` branch and deploys automatically when new commits are pushed
+
+This means:
+- Pull requests are validated by CI before merge
+- Merging to `main` automatically triggers a new deployment on both platforms
+- No duplicate deployment logic is needed in GitHub Actions
+
+### GitHub Secrets required
+
+If you fork this repository and connect to Vercel/Render, you do not need any GitHub Secrets for the CI workflow — tests use mock values. The platforms themselves handle deployment credentials.
+
+---
+
 ## Running Tests
 
 ```bash
 cd backend
-pytest app/tests/ -v
-pytest app/tests/ --cov=app --cov-report=term-missing
+python -m pytest app/tests/ -v
+python -m pytest app/tests/ --cov=app --cov-report=term-missing
 ```
 
 Current test count: **176 passing**
+
+---
+
+## How to Use ClauseGuard
+
+Once the app is running (see Quick Start above):
+
+### 1. Create an account
+Go to `http://localhost:3000` → click **Get started** → enter your email and a password (min 8 chars).
+
+### 2. Upload a rental agreement
+From the Dashboard, click **+ Upload** → drag & drop or select your PDF → give it a title → click **Upload Agreement**.
+
+### 3. Process the document
+On the Agreement page, click **Process Document**. ClauseGuard will extract text, detect clauses, and build the semantic search index. This takes 10–30 seconds depending on the PDF size.
+
+### 4. Run Attention Analysis
+Click **Analyse Agreement** to scan all 10 predefined categories (Security Deposit, Notice Period, Lock-in, etc.) and see which clauses deserve your attention.
+
+### 5. Check Missing Information
+Click **Check Missing Information** to see which of the 10 categories are clearly present, unclear, or not found in your agreement.
+
+### 6. Ask questions
+Type any question in the **ClauseGuard AI Assistant** chat box, e.g.:
+- "What is the notice period?"
+- "What happens if I leave before the lock-in period?"
+- "Who pays for repairs?"
+
+The assistant answers strictly from your uploaded document and provides citations (clause number + page).
+
+### 7. Review extracted clauses
+Scroll to **Extracted Clauses** and click to expand — every clause from the document is shown with its page number.
+
+### 8. Delete a document
+Click **Delete document** at the bottom of the Agreement page. This removes the PDF, all extracted clauses, vectors, analysis results, and chat history.
 
 ---
 

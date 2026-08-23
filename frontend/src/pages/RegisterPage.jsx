@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { register } from '../services/authApi'
 import Disclaimer from '../components/layout/Disclaimer'
@@ -12,9 +12,9 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Use Navigate component instead of imperative navigate() during render
   if (isAuthenticated) {
-    navigate('/dashboard', { replace: true })
-    return null
+    return <Navigate to="/dashboard" replace />
   }
 
   async function handleSubmit(e) {
@@ -30,9 +30,16 @@ export default function RegisterPage() {
       setToken(data.access_token)
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(
-        err.response?.data?.detail || 'Registration failed. Please try again.'
-      )
+      if (!err.response) {
+        // Network error — backend not running
+        setError('Cannot connect to the server. Please make sure the backend is running on port 8000.')
+      } else if (err.response?.status === 409) {
+        setError('An account with this email already exists. Please sign in instead.')
+      } else {
+        setError(
+          err.response?.data?.detail || 'Registration failed. Please try again.'
+        )
+      }
     } finally {
       setLoading(false)
     }
