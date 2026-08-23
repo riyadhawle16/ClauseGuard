@@ -1,4 +1,6 @@
 import logging
+import sys
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -17,6 +19,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception:
+        traceback.print_exc(file=sys.stderr)
         logger.exception("Unexpected error in /register for %s", request.email)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -31,6 +34,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception:
+        traceback.print_exc(file=sys.stderr)
         logger.exception("Unexpected error in /login for %s", request.email)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

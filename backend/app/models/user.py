@@ -6,24 +6,16 @@ from app.database import Base
 
 
 class GUID(TypeDecorator):
-    """Platform-independent GUID type.
-    Uses PostgreSQL's UUID type natively, falls back to CHAR(36) for SQLite.
-    """
+    """Store UUIDs as CHAR(36) strings — matches Alembic migrations on all DBs."""
     impl = CHAR
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == "postgresql":
-            from sqlalchemy.dialects.postgresql import UUID
-            return dialect.type_descriptor(UUID())
-        else:
-            return dialect.type_descriptor(CHAR(36))
+        return dialect.type_descriptor(CHAR(36))
 
     def process_bind_param(self, value, dialect):
         if value is None:
             return value
-        if dialect.name == "postgresql":
-            return str(value)
         if not isinstance(value, uuid_module.UUID):
             return str(uuid_module.UUID(str(value)))
         return str(value)

@@ -10,16 +10,13 @@ from alembic import context
 
 # Import all models so autogenerate detects them
 from app.models import *  # noqa: F401, F403
-from app.database import Base
-from app.config import get_settings
-
-settings = get_settings()
+from app.database import Base, get_database_url
 
 # Alembic Config object
 config = context.config
 
 # Override the sqlalchemy.url with our environment-driven value
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", get_database_url())
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

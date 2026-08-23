@@ -1,21 +1,31 @@
 import logging
 import os
+import sys
+import uuid
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
 from app.api.chat import router as chat_router
 from app.api.attention import router as attention_router
 from app.api.missing_info import router as missing_info_router
+from app.dependencies import get_db
+from app.models.user import User
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    force=True,
+_handler = logging.StreamHandler(sys.stderr)
+_handler.setFormatter(
+    logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
 )
+logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
+for _logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    _uvicorn_logger = logging.getLogger(_logger_name)
+    _uvicorn_logger.handlers.clear()
+    _uvicorn_logger.propagate = True
 logger = logging.getLogger(__name__)
 
 # ── Load settings ─────────────────────────────────────────────────────────────
@@ -114,3 +124,52 @@ def health_check():
         "status": "ok",
         "cors_origins": origins,
     }
+
+
+@app.get("/health/db")
+def health_db(db: Session = Depends(get_db)):
+    """
+    Database diagnostic — verifies connectivity and that user INSERT works.
+    Uses a rolled-back savepoint so no test data is persisted.
+    """
+    from app.services.auth_service import hash_password
+
+    try:
+        db.execute(text("SELECT 1"))
+        user_count = db.query(User).count()
+
+        insert_ok = True
+        insert_error = None
+        savepoint = db.begin_nested()
+        try:
+            probe = User(
+                email=f"__probe_{uuid.uuid4()}@probe.invalid",
+                password_hash=hash_password("__health_probe__"),
+            )
+            db.add(probe)
+            db.flush()
+        except Exception as exc:
+            insert_ok = False
+            insert_error = f"{type(exc).__name__}: {exc}"
+        finally:
+            savepoint.rollback()
+
+        payload = {
+            "status": "ok" if insert_ok else "degraded",
+            "db_connected": True,
+            "user_count": user_count,
+            "insert_probe": insert_ok,
+        }
+        if insert_error:
+            payload["insert_error"] = insert_error
+        return payload
+    except Exception as exc:
+        logger.exception("Database health check failed")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "db_connected": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
