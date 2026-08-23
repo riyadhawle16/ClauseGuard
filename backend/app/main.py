@@ -15,13 +15,6 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # ── Parse CORS origins ────────────────────────────────────────────────────────
-# CORS_ORIGINS is a comma-separated string in the environment variable.
-# We parse it here at module load time (when uvicorn starts).
-# On Render, environment variables are injected BEFORE the Python process starts,
-# so this is safe and will always read the correct production value.
-#
-# The production Vercel URL is also added as a hardcoded safety net to ensure
-# it is always allowed even if CORS_ORIGINS is misconfigured on Render.
 _PRODUCTION_VERCEL_URL = "https://clause-guard-ruddy.vercel.app"
 
 _raw_origins = os.environ.get("CORS_ORIGINS", settings.CORS_ORIGINS).strip()
@@ -30,11 +23,9 @@ if _raw_origins:
 else:
     origins = ["http://localhost:5173"]
 
-# Always include the production Vercel URL
 if _PRODUCTION_VERCEL_URL not in origins:
     origins.append(_PRODUCTION_VERCEL_URL)
 
-# SAFE startup log — never logs secrets
 logger.info("ClauseGuard starting | CORS allowed origins: %s", origins)
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
@@ -44,7 +35,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Middleware MUST be added before the app starts (not inside a startup event)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -63,12 +53,22 @@ app.include_router(missing_info_router, prefix="/api/v1")
 @app.on_event("startup")
 def run_migrations_on_startup():
     """
-    Automatically apply all pending Alembic migrations when the server starts.
-    Also logs the active CORS origins so they are visible in Render logs.
+    Startup tasks:
+    1. Log DB host (safe — no password)
+    2. Log CORS origins
+    3. Apply Alembic migrations
     """
-    # Log CORS origins at startup so they appear in Render logs
-    # SAFE — never logs secrets (DATABASE_URL, JWT_SECRET_KEY, GROQ_API_KEY)
+    # Import here to get the fixed URL after postgres:// → postgresql:// correction
+    from app.database import _db_url as resolved_db_url
+
+    # Log only host+dbname, never the password
+    if "@" in resolved_db_url:
+        safe_db_info = resolved_db_url.split("@")[-1]
+    else:
+        safe_db_info = resolved_db_url[:30] + "..."
+
     logger.warning("=== ClauseGuard startup ===")
+    logger.warning("DB host/name (safe): %s", safe_db_info)
     logger.warning("CORS allowed origins: %s", origins)
 
     try:
@@ -81,15 +81,15 @@ def run_migrations_on_startup():
             os.path.join(os.path.dirname(__file__), "..", "migrations"),
         )
         command.upgrade(alembic_cfg, "head")
-        logger.info("Database migrations applied successfully.")
+        logger.warning("Database migrations applied successfully.")
     except Exception as exc:
         logger.error("Migration failed on startup: %s", exc)
 
 
 @app.get("/health")
 def health_check():
-    """Health check — also returns active CORS origins for verification."""
+    """Health check — returns CORS origins for production verification."""
     return {
         "status": "ok",
-        "cors_origins": origins,  # shows what origins are actually active
+        "cors_origins": origins,
     }
