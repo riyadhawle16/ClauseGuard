@@ -14,8 +14,9 @@ os.environ["CHROMA_PERSIST_DIRECTORY"] = ""   # signal to use ephemeral in tests
 import app.models  # noqa: F401, E402
 
 from app.main import app as fastapi_app  # noqa: E402
-from app.database import Base  # noqa: E402
+from app.database import Base, SessionLocal  # noqa: E402
 from app.dependencies import get_db  # noqa: E402
+import app.services.processing_service as processing_service  # noqa: E402
 
 # Use in-memory SQLite so each test session starts completely clean
 SQLALCHEMY_TEST_URL = "sqlite://"
@@ -42,10 +43,13 @@ def override_get_db():
 def override_db():
     """Override the DB dependency and clean all table data between tests."""
     fastapi_app.dependency_overrides[get_db] = override_get_db
+    original_session_local = processing_service.SessionLocal
+    processing_service.SessionLocal = TestingSessionLocal
     yield
     for table in reversed(Base.metadata.sorted_tables):
         connection.execute(table.delete())
     connection.commit()
+    processing_service.SessionLocal = original_session_local
     fastapi_app.dependency_overrides.clear()
 
 

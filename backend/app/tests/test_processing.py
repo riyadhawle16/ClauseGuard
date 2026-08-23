@@ -202,9 +202,11 @@ def test_owner_can_process_document(client, tmp_uploads):
     doc_id, res = upload_and_process(client, token, pdf_bytes)
     assert res.status_code == 200, res.text
     data = res.json()
-    assert data["status"] == "ready"
-    assert data["clauses_extracted"] >= 1
-    assert data["pages_extracted"] >= 1
+    assert data["status"] in ("ready", "processing")
+    doc_res = client.get(f"/api/v1/documents/{doc_id}", headers=auth_headers(token))
+    final = doc_res.json()
+    assert final["processing_status"] == "ready"
+    assert final.get("clause_count", 0) >= 1
 
 
 def test_unauthenticated_cannot_process(client, tmp_uploads):
@@ -265,8 +267,9 @@ def test_empty_pdf_fails_safely(client, tmp_uploads):
         pytest.skip("Empty PDF rejected at upload — acceptable")
     doc_id = up.json()["id"]
     res = client.post(f"/api/v1/documents/{doc_id}/process", headers=auth_headers(token))
-    assert res.status_code == 422
-    # Status must be 'failed'
+    assert res.status_code == 200
+    assert res.json()["status"] == "processing"
+    # Background task runs before the TestClient call returns
     doc_res = client.get(f"/api/v1/documents/{doc_id}", headers=auth_headers(token))
     assert doc_res.json()["processing_status"] == "failed"
     # Error message must not contain stack trace or filesystem path

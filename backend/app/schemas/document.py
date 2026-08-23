@@ -32,9 +32,10 @@ class ClauseResponse(BaseModel):
 class ProcessingResult(BaseModel):
     document_id: str
     status: str
-    pages_extracted: int
-    clauses_extracted: int
+    pages_extracted: Optional[int] = None
+    clauses_extracted: Optional[int] = None
     vectors_indexed: Optional[int] = None
+    message: Optional[str] = None
 
 
 class SearchResult(BaseModel):

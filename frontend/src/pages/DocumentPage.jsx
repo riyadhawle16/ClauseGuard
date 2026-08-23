@@ -86,23 +86,36 @@ export default function DocumentPage() {
 
   useEffect(() => { loadDocument() }, [loadDocument])
 
+  async function pollUntilReady(docId, { intervalMs = 3000, maxAttempts = 120 } = {}) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const data = await getDocument(docId)
+      setDoc(data)
+      if (data.processing_status === 'ready') return data
+      if (data.processing_status === 'failed') {
+        throw new Error(data.processing_error || 'Processing failed. The PDF may be image-only or corrupt.')
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+    throw new Error('Processing is taking longer than expected. Please refresh the page.')
+  }
+
   async function handleProcess() {
     setProcessError('')
     setProcessing(true)
     try {
       await triggerProcessing(id)
-      const data = await getDocument(id)
-      setDoc(data)
+      setDoc((current) => current ? { ...current, processing_status: 'processing' } : current)
+      const data = await pollUntilReady(id)
       if (data.processing_status === 'ready') {
         const cls = await fetchClauses(id)
         setClauses(cls)
       }
     } catch (err) {
-      const msg = err.response?.data?.detail
+      const msg = err.response?.data?.detail || err.message
       if (err.response?.status === 422) {
         setProcessError(msg || 'Processing failed. The PDF may be image-only or corrupt.')
       } else {
-        setProcessError('Processing failed. Please try again.')
+        setProcessError(msg || 'Processing failed. Please try again.')
       }
       try { const d = await getDocument(id); setDoc(d) } catch {}
     } finally {
@@ -212,7 +225,7 @@ export default function DocumentPage() {
 
             {doc.processing_status === 'processing' && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-sm text-blue-700">
-                Processing agreement — this may take a moment…
+                Processing agreement — extracting text and building search index. This may take a minute…
               </div>
             )}
 

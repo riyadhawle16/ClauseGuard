@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import threading
 import uuid
 
 from fastapi import Depends, FastAPI, Request
@@ -115,6 +116,16 @@ def run_migrations_on_startup():
         logger.warning("Database migrations applied successfully.")
     except Exception as exc:
         logger.error("Migration failed on startup: %s", exc)
+
+    def _preload_embedding_model() -> None:
+        try:
+            from app.services.embedding_service import preload_embedding_model
+            preload_embedding_model()
+            logger.warning("Embedding model preloaded successfully.")
+        except Exception:
+            logger.exception("Embedding model preload failed")
+
+    threading.Thread(target=_preload_embedding_model, daemon=True).start()
 
 
 @app.get("/health")

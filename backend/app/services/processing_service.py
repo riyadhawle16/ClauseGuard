@@ -2,22 +2,15 @@
 Processing service — orchestrates the full Phase 4+5 pipeline:
   load PDF → extract text → extract clauses → store in PostgreSQL
            → generate embeddings → store in Chroma → mark ready
-
-Reprocessing (Option B — replace):
-  Old PostgreSQL clauses are deleted before new ones are inserted.
-  Old Chroma vectors are deleted before new ones are stored.
-  This prevents duplicates in both stores.
-
-Partial failure handling:
-  If Chroma indexing fails after PostgreSQL insert, the clauses remain in
-  PostgreSQL (useful for debugging/reprocessing) but the document is marked
-  'failed'. Partial Chroma vectors for that document are cleaned up.
 """
 import logging
+import sys
+import traceback
 from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status as http_status
 
+from app.database import SessionLocal
 from app.repositories.document_repo import get_document_by_id, update_processing_status
 from app.repositories.clause_repo import (
     delete_clauses_by_document,
@@ -139,6 +132,7 @@ def process_document(
             detail=safe_message,
         )
     except Exception:
+        traceback.print_exc(file=sys.stderr)
         logger.exception("Unexpected error processing document %s", document_id)
         update_processing_status(
             db, document_id, "failed",
@@ -148,3 +142,38 @@ def process_document(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Document processing failed. Please try again.",
         )
+
+
+def run_processing_job(
+    document_id: str,
+    user_id: str,
+    chroma_persist_directory: Optional[str] = None,
+) -> None:
+    """
+    Background worker entry point. Opens its own DB session so the HTTP
+    request can return immediately while processing continues.
+    """
+    db = SessionLocal()
+    try:
+        process_document(db, document_id, user_id, chroma_persist_directory)
+    except HTTPException as exc:
+        logger.warning(
+            "Processing job for document %s finished with HTTP %s: %s",
+            document_id,
+            exc.status_code,
+            exc.detail,
+        )
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        logger.exception("Background processing job crashed for document %s", document_id)
+        try:
+            update_processing_status(
+                db,
+                document_id,
+                "failed",
+                error="An unexpected error occurred during processing.",
+            )
+        except Exception:
+            logger.exception("Could not mark document %s as failed", document_id)
+    finally:
+        db.close()

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -10,7 +10,7 @@ from app.services.document_service import (
     list_documents,
     remove_document,
 )
-from app.services.processing_service import process_document
+from app.services.processing_service import run_processing_job
 from app.repositories.clause_repo import (
     get_clauses_by_document,
     count_clauses_by_document,
@@ -94,16 +94,32 @@ def delete_user_document(
 @router.post("/{document_id}/process", response_model=ProcessingResult)
 def trigger_processing(
     document_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """
-    Process an uploaded PDF — extract text, clauses, and generate embeddings.
-    Ownership enforced: returns 404 for cross-user access.
-    Reprocessing replaces existing clauses and vectors (no duplicates).
+    Start PDF processing in the background.
+    Returns immediately with status 'processing' — poll GET /documents/{id}
+    until status becomes 'ready' or 'failed'.
     """
-    result = process_document(db, document_id, str(current_user.id))
-    return ProcessingResult(**result)
+    user_id = str(current_user.id)
+    doc = get_document_by_id(db, document_id, user_id)
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if doc.processing_status == "processing":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document is already being processed",
+        )
+
+    background_tasks.add_task(run_processing_job, document_id, user_id)
+
+    return ProcessingResult(
+        document_id=document_id,
+        status="processing",
+        message="Processing started. Poll this document until status is ready or failed.",
+    )
 
 
 # ── Clauses ───────────────────────────────────────────────────────────────────
