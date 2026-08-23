@@ -89,6 +89,7 @@ def run_migrations_on_startup():
 @app.get("/health")
 def health_check():
     """Health check — returns CORS origins for production verification."""
+    print("HEALTH CHECK HIT", flush=True)
     return {
         "status": "ok",
         "cors_origins": origins,
