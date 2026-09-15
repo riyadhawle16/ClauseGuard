@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 1440
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama3-8b-8192"
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
     CHROMA_HOST: str = "chroma"
     CHROMA_PORT: int = 8000
     CHROMA_PERSIST_DIRECTORY: str = "./chroma_data"
