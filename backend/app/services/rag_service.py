@@ -49,8 +49,9 @@ logger = logging.getLogger(__name__)
 #   0.6 – 0.75 = somewhat related (borderline)
 #   0.75 – 1.0  = weakly related / different topic
 #   > 1.0        = almost certainly unrelated
-# We use 0.75 to keep genuine matches and filter weak ones.
-STAGE1_THRESHOLD = 0.75
+# Raised from 0.75 → 0.85 to capture real matches that use different wording
+# (e.g. "who pays for maintenance" matching clauses about "repairs" or "upkeep").
+STAGE1_THRESHOLD = 0.85
 
 # ── Stage 2: Minimum keyword overlap ──────────────────────────────────────────
 # After Stage 1 filtering, require at least this many query keywords to appear
@@ -67,6 +68,22 @@ _STOP_WORDS = {
     "my", "you", "your", "he", "she", "it", "we", "they", "them", "their",
     "about", "in", "on", "at", "to", "for", "of", "with", "by", "from",
     "if", "there", "any", "all", "not", "no", "and", "or", "but",
+    "tell", "me", "give", "please", "explain", "describe", "show",
+    "get", "ask", "say", "says", "said", "just", "also", "more",
+}
+
+# Synonym map: expands query keywords so "maintenance" also matches
+# clauses that use "repair", "upkeep", "fix" etc.
+_SYNONYMS: dict = {
+    "maintenance": ["repair", "repairs", "upkeep", "fix", "fixing", "maintain"],
+    "notice":      ["notification", "notify", "termination", "vacate", "vacancy"],
+    "deposit":     ["security", "bond", "refund"],
+    "rent":        ["payment", "monthly", "due", "owe"],
+    "terminate":   ["termination", "end", "cancel", "vacate", "notice"],
+    "late":        ["overdue", "delinquent", "penalty", "fee", "grace"],
+    "pet":         ["animal", "dog", "cat", "pets"],
+    "sublease":    ["sublet", "subletting", "assign", "assignment"],
+    "utilities":   ["electricity", "water", "gas", "internet", "trash"],
 }
 
 DEFAULT_TOP_K = 5
@@ -166,12 +183,20 @@ def _classify_relevance(
         return RELEVANT
 
     searchable = (clause_content + " " + (clause_heading or "")).lower()
-    overlap = sum(1 for kw in query_keywords if kw in searchable)
+
+    # Expand each keyword with its synonyms before checking overlap
+    expanded_keywords: List[str] = []
+    for kw in query_keywords:
+        expanded_keywords.append(kw)
+        expanded_keywords.extend(_SYNONYMS.get(kw, []))
+
+    overlap = sum(1 for kw in expanded_keywords if kw in searchable)
 
     logger.debug(
-        "Stage 2 | distance=%.3f | keywords=%s | overlap=%d | text_preview='%s...'",
+        "Stage 2 | distance=%.3f | keywords=%s | expanded=%s | overlap=%d | text_preview='%s...'",
         distance,
         query_keywords,
+        expanded_keywords,
         overlap,
         searchable[:80],
     )

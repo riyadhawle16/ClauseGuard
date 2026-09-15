@@ -26,8 +26,14 @@ COLLECTION_NAME = "clauseguard_clauses"
 def _get_client(persist_directory: Optional[str] = None):
     """
     Return a Chroma client.
-    If persist_directory is None, use the configured production directory.
-    If persist_directory is an empty string '', use an in-memory EphemeralClient.
+
+    Selection logic:
+      persist_directory == ""   → in-memory EphemeralClient (tests only)
+      persist_directory is None → read config:
+          - If CHROMA_HOST is set (not the placeholder "chroma" default),
+            use HttpClient(host, port) so a remote Chroma server is used.
+          - Otherwise use PersistentClient(CHROMA_PERSIST_DIRECTORY).
+      persist_directory == <path> → PersistentClient at that path (tests)
     """
     import chromadb
     if persist_directory == "":
@@ -35,7 +41,19 @@ def _get_client(persist_directory: Optional[str] = None):
         return chromadb.EphemeralClient()
     if persist_directory is None:
         from app.config import get_settings
-        persist_directory = get_settings().CHROMA_PERSIST_DIRECTORY
+        settings = get_settings()
+        # Use HTTP client when a real Chroma host is explicitly configured
+        # (i.e. not the default placeholder value "chroma")
+        if settings.CHROMA_HOST and settings.CHROMA_HOST != "chroma":
+            logger.info(
+                "Connecting to Chroma HTTP server at %s:%s",
+                settings.CHROMA_HOST, settings.CHROMA_PORT,
+            )
+            return chromadb.HttpClient(
+                host=settings.CHROMA_HOST,
+                port=settings.CHROMA_PORT,
+            )
+        persist_directory = settings.CHROMA_PERSIST_DIRECTORY
     return chromadb.PersistentClient(path=persist_directory)
 
 

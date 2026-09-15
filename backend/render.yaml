@@ -20,13 +20,13 @@ services:
       - key: GROQ_API_KEY
         sync: false   # Set in Render dashboard
       - key: GROQ_MODEL
-        value: llama3-8b-8192
+        value: openai/gpt-oss-20b
       - key: EMBEDDING_MODEL
         value: sentence-transformers/all-MiniLM-L6-v2
       - key: CHROMA_PERSIST_DIRECTORY
-        value: /opt/render/project/chroma_data
+        value: /opt/render/project/src/chroma_data
       - key: UPLOAD_DIR
-        value: /opt/render/project/uploads
+        value: /opt/render/project/src/uploads
       - key: MAX_FILE_SIZE_MB
         value: "20"
       - key: CORS_ORIGINS
