@@ -88,7 +88,7 @@ def remove_document(db: Session, doc_id: str, user_id: str) -> None:
             "Could not remove Chroma vectors for document %s during deletion", doc.id
         )
 
-    # Remove chat sessions and messages for this document (best-effort)
+    # Remove chat sessions and messages for this document
     try:
         from app.models.chat import ChatSession, ChatMessage
         sessions = db.query(ChatSession).filter(ChatSession.document_id == str(doc.id)).all()
@@ -100,6 +100,23 @@ def remove_document(db: Session, doc_id: str, user_id: str) -> None:
         import logging
         logging.getLogger(__name__).warning(
             "Could not remove chat sessions for document %s during deletion", doc.id
+        )
+
+    # Remove missing info flags, attention flags, and clauses — in that order
+    # because attention_flags and missing_info_flags have FKs pointing to clauses.
+    # Without these deletions db.delete(doc) raises a FK IntegrityError and silently fails.
+    try:
+        from app.models.missing_info_flag import MissingInfoFlag
+        from app.models.attention_flag import AttentionFlag
+        from app.models.clause import Clause
+        db.query(MissingInfoFlag).filter(MissingInfoFlag.document_id == str(doc.id)).delete(synchronize_session=False)
+        db.query(AttentionFlag).filter(AttentionFlag.document_id == str(doc.id)).delete(synchronize_session=False)
+        db.query(Clause).filter(Clause.document_id == str(doc.id)).delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Could not remove clauses/flags for document %s during deletion", doc.id
         )
 
     # Remove DB record
